@@ -69,9 +69,14 @@ class SophosXGRulesConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await _validate_connection(self.hass, user_input)
             except SophosAuthError:
                 errors["base"] = "invalid_auth"
-            except SophosConnectionError:
+            except SophosConnectionError as err:
+                _LOGGER.warning("Could not connect to Sophos firewall: %s", err)
                 errors["base"] = "cannot_connect"
-            except SophosApiError:
+            except SophosApiError as err:
+                # Logged at error level with the real message/response snippet
+                # so it's visible in Settings > System > Logs, since the form
+                # only ever shows the generic "unknown" translation to the user.
+                _LOGGER.exception("Unexpected error validating Sophos firewall connection: %s", err)
                 errors["base"] = "unknown"
             else:
                 return self.async_create_entry(
@@ -137,7 +142,12 @@ class SophosXGRulesOptionsFlow(config_entries.OptionsFlow):
                 )
                 try:
                     await client.async_get_rule_state(rule_name)
-                except SophosApiError:
+                except SophosApiError as err:
+                    _LOGGER.warning(
+                        "Could not fetch rule '%s' from Sophos firewall: %s",
+                        rule_name,
+                        err,
+                    )
                     errors["rule_name"] = "rule_not_found"
                 else:
                     rules.append(rule_name)

@@ -85,14 +85,19 @@ class SophosXGClient:
 
     async def _post(self, request_root: ET.Element) -> ET.Element:
         """POST an XML <Request> element and return the parsed <Response>."""
-        xml_bytes = b'<?xml version="1.0" encoding="UTF-8"?>' + ET.tostring(
+        xml_str = '<?xml version="1.0" encoding="UTF-8"?>' + ET.tostring(
             request_root, encoding="unicode"
-        ).encode("utf-8")
+        )
 
         try:
+            # NOTE: the value must be a plain str, not bytes - aiohttp encodes
+            # a dict with a str value as application/x-www-form-urlencoded
+            # (what the Sophos API expects), but switches to multipart/
+            # form-data as soon as any value is bytes/file-like, which the
+            # firewall's APIController does not understand.
             async with self._session.post(
                 self._url,
-                data={"reqxml": xml_bytes},
+                data={"reqxml": xml_str},
                 ssl=self._verify_ssl,
                 timeout=aiohttp.ClientTimeout(total=API_TIMEOUT),
             ) as resp:
@@ -109,7 +114,10 @@ class SophosXGClient:
         try:
             response_root = ET.fromstring(text)
         except ET.ParseError as err:
-            raise SophosApiError(f"Could not parse firewall response: {err}") from err
+            _LOGGER.debug("Non-XML response from firewall: %s", text[:500])
+            raise SophosApiError(
+                f"Could not parse firewall response as XML: {err}"
+            ) from err
 
         login_status = response_root.findtext("Login/status", default="")
         if login_status and "Authentication Successful" not in login_status:
