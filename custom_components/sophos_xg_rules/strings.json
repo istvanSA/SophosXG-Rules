@@ -1,0 +1,57 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Sophos Firewall",
+        "description": "Enter the API user you created for Home Assistant (Authentication > Users, type Administrator, with read/write rights). API access must be enabled under Backup & Firmware > API, with Home Assistant's IP allowed.",
+        "data": {
+          "host": "Host or IP address",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Login failed - check the username and password.",
+      "cannot_connect": "Could not reach the firewall at that host/port. Check the address, port, and that API access is enabled and allows this IP.",
+      "unknown": "Unexpected error while contacting the firewall."
+    },
+    "abort": {
+      "already_configured": "This firewall is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Manage tracked firewall rules",
+        "menu_options": {
+          "add_rule": "Add a rule",
+          "remove_rule": "Remove a rule"
+        }
+      },
+      "add_rule": {
+        "title": "Add a firewall rule",
+        "description": "Enter the exact rule Name as it appears in the Sophos firewall (Rules and policies). A switch entity will be created for it.",
+        "data": {
+          "rule_name": "Firewall rule name"
+        }
+      },
+      "remove_rule": {
+        "title": "Remove tracked rules",
+        "data": {
+          "rule_names": "Rules to remove"
+        }
+      }
+    },
+    "error": {
+      "invalid_rule_name": "Enter a rule name.",
+      "rule_already_added": "This rule is already tracked.",
+      "rule_not_found": "No firewall rule with that exact name was found."
+    },
+    "abort": {
+      "no_rules_configured": "No rules are currently tracked."
+    }
+  }
+}
