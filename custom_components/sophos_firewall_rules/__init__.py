@@ -1,18 +1,34 @@
 """Expose selected Sophos Firewall rules as Home Assistant switches."""
 
+from pathlib import Path
 from typing import Any
 
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_KEY, CONF_HOST, CONF_PORT, CONF_VERIFY_SSL, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 from yarl import URL
 
 from .api import SophosClient
+from .const import DOMAIN
 from .coordinator import RulesCoordinator
+from .websocket import async_register_commands
 
 PLATFORMS = [Platform.SWITCH]
 type SophosConfigEntry = ConfigEntry[RulesCoordinator]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the rule card module and its WebSocket commands."""
+    url = f"/{DOMAIN}/rule-card.js"
+    source = Path(__file__).with_name("rule-card.js")
+    await hass.http.async_register_static_paths([StaticPathConfig(url, str(source), False)])
+    add_extra_js_url(hass, url)
+    async_register_commands(hass)
+    return True
 
 
 def make_client(hass: HomeAssistant, data: dict[str, Any]) -> SophosClient:

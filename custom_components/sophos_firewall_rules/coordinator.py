@@ -3,6 +3,7 @@
 from asyncio import Lock
 from datetime import timedelta
 import logging
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -11,6 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import Rule, SophosApiError, SophosAuthError, SophosClient
 from .const import DOMAIN
+from .editor import async_apply_changes
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,3 +55,13 @@ class RulesCoordinator(DataUpdateCoordinator[dict[str, Rule]]):
             await self.async_refresh()
             raise HomeAssistantError(str(err)) from err
         await self.async_refresh()
+
+    async def async_edit_rule(
+        self, rule: Rule, revision: str, changes: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Serialize editor writes with rule polling and existing switches."""
+        try:
+            async with self._lock:
+                return await async_apply_changes(self.client, rule, revision, changes)
+        finally:
+            await self.async_refresh()

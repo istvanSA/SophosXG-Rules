@@ -22,6 +22,20 @@ The original XML-based Sophos XG Firewall Rule Control integration (`sophos_xg_r
 
 Switch **On** means the rule is enabled, whether the rule allows or blocks traffic. The integration polls once a minute while switches are in use and reads the rule back after a toggle. A missing rule or failed poll makes the affected switches unavailable. Home Assistant prompts for a replacement key if the firewall rejects the current one with HTTP 401.
 
+## Edit a rule from a dashboard
+
+The integration registers the card automatically when Home Assistant loads it. After updating and restarting Home Assistant, refresh any open dashboard tab. As a Home Assistant administrator, edit a dashboard and add the **Sophos Firewall Rule** card. You can also add it with this manual card configuration.
+
+```yaml
+type: custom:sophos-firewall-rule-card
+```
+
+Choose one of the rules selected in the integration. The card shows its status and action, the assigned application and web filters, the traffic shaping policy, and **Block QUIC**. The dropdowns use policies available on the firewall. Policy editing applies to standard allow rules. The API key needs read access to the policy catalogs to populate the dropdowns.
+
+**Apply** sends your edits to Sophos and verifies the resulting settings. **Cancel** discards pending edits. Use **Refresh** to load changes made in Sophos or Home Assistant since you opened the rule.
+
+For automations, target the rule's existing `switch` entity with **Turn on** or **Turn off**. The card is optional.
+
 ## Replace an existing XML installation
 
 Before uninstalling the old integration, note its entity IDs and the dashboard cards and automations that reference them. Remove the old integration entry, install the REST integration, and select the same rules. Then update the references to the new switches, or assign the previous entity IDs to the new switches once those IDs are free.

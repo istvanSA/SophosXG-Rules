@@ -8,6 +8,11 @@ import aiohttp
 from yarl import URL
 
 FAMILIES = ("ipv4", "ipv6")
+POLICY_ROUTES = {
+    "application_policy": "application/policies",
+    "web_policy": "web/policies",
+    "traffic_shaping_policy": "traffic-shaping/policies",
+}
 
 
 class SophosApiError(Exception):
@@ -69,7 +74,8 @@ class SophosClient:
         self, session: aiohttp.ClientSession, origin: URL, api_key: str
     ) -> None:
         self._session = session
-        self._base = origin / "api/firewall-config/v1/firewall/rules"
+        self._config_api = origin / "api/firewall-config/v1"
+        self._base = self._config_api / "firewall/rules"
         self._headers = {"Accept": "application/json", "Authorization": f"Bearer {api_key}"}
 
     async def _request(
@@ -78,7 +84,7 @@ class SophosClient:
         url: URL,
         *,
         params: dict[str, str] | None = None,
-        payload: dict[str, bool] | None = None,
+        payload: dict[str, Any] | None = None,
         collection: bool = False,
     ) -> Any:
         try:
@@ -146,11 +152,23 @@ class SophosClient:
     async def _async_read_rule_page(
         self, family: str, page: int
     ) -> tuple[dict[str, Rule], bool]:
+        items, has_next = await self._async_read_page(
+            self._base / family, page, rule_collection=True
+        )
+        rules = {}
+        for item in items:
+            rule = Rule.from_json(family, item)
+            rules[rule.key] = rule
+        return rules, has_next
+
+    async def _async_read_page(
+        self, url: URL, page: int, *, rule_collection: bool = False
+    ) -> tuple[list[Any], bool]:
         data = await self._request(
             "GET",
-            self._base / family,
+            url,
             params={"page": str(page), "pageTotal": "true"},
-            collection=True,
+            collection=rule_collection,
         )
         if not isinstance(data, dict) or not isinstance(data.get("items"), list):
             raise SophosApiError("expected an items array")
@@ -173,21 +191,47 @@ class SophosClient:
         else:
             raise SophosApiError("invalid page total")
 
-        rules: dict[str, Rule] = {}
-        for item in items:
-            rule = Rule.from_json(family, item)
-            rules[rule.key] = rule
-        return rules, has_next
+        return items, has_next
+
+    async def async_list_policy_names(self, kind: str) -> list[str]:
+        """Read all policies of a supported kind for the rule editor."""
+        url = self._config_api / POLICY_ROUTES[kind]
+        page = 1
+        seen: set[str] = set()
+        eligible: list[str] = []
+        while True:
+            items, has_next = await self._async_read_page(url, page)
+            for item in items:
+                name = item.get("name") if isinstance(item, dict) else None
+                if not isinstance(name, str) or not name or name in seen:
+                    raise SophosApiError("Unexpected or repeated policy name")
+                seen.add(name)
+                if kind != "traffic_shaping_policy" or item.get("associatesWith") == "rules":
+                    eligible.append(name)
+            if not has_next:
+                return sorted(eligible, key=str.casefold)
+            page += 1
+
+    async def async_get_rule_details(self, rule: Rule) -> dict[str, Any]:
+        """Read a single rule and verify its identity."""
+        data = await self._request("GET", self._base / rule.family / rule.id)
+        if Rule.from_json(rule.family, data).id != rule.id:
+            raise SophosApiError("The firewall returned a different rule")
+        return data
+
+    async def async_patch_rule(
+        self, rule: Rule, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Apply a partial update and return the firewall's subsequent state."""
+        try:
+            await self._request("PATCH", self._base / rule.family / rule.id, payload=payload)
+        except SophosConnectionError:
+            # The firewall may have applied the write despite the lost response.
+            pass
+        return await self.async_get_rule_details(rule)
 
     async def async_set_enabled(self, rule: Rule, enabled: bool) -> None:
         """Patch the enabled field and verify it with a fresh GET."""
-        url = self._base / rule.family / rule.id
-        try:
-            await self._request("PATCH", url, payload={"enabled": enabled})
-        except SophosConnectionError:
-            # Sophos may have applied the change even if the client timed out.
-            # Read it back before deciding whether the action succeeded.
-            pass
-        actual = Rule.from_json(rule.family, await self._request("GET", url))
-        if actual.id != rule.id or actual.enabled is not enabled:
+        actual = await self.async_patch_rule(rule, {"enabled": enabled})
+        if actual["enabled"] is not enabled:
             raise SophosApiError("The firewall did not confirm the requested rule state")
