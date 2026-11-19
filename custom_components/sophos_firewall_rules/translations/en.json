@@ -1,0 +1,59 @@
+{
+  "title": "Sophos Firewall Rules",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Sophos Firewall",
+        "description": "Enter the HTTPS admin address and a Sophos Firewall REST API key.",
+        "data": {
+          "host": "Firewall hostname or IP address",
+          "port": "HTTPS admin port",
+          "api_key": "REST API key",
+          "verify_ssl": "Verify TLS certificate"
+        }
+      },
+      "rules": {
+        "title": "Choose firewall rules",
+        "description": "Select the IPv4 or IPv6 rules you want to control from Home Assistant.",
+        "data": {
+          "rules": "Firewall rules"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Replace the Sophos REST API key",
+        "data": {
+          "api_key": "REST API key"
+        }
+      }
+    },
+    "error": {
+      "invalid_host": "Enter a firewall hostname or IP address.",
+      "invalid_auth": "The firewall API key is missing or invalid.",
+      "permission_denied": "The firewall denied API access. Check Home Assistant’s allowed IP and the administrator profile.",
+      "unsupported_firmware": "The firewall REST API was not found. Sophos Firewall OS 23.0 or later is required.",
+      "cannot_connect": "Could not reach the Sophos HTTPS admin endpoint. Check the address, port, and TLS certificate.",
+      "unexpected_response": "The firewall returned a response this integration could not read."
+    },
+    "abort": {
+      "already_configured": "This firewall is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Choose firewall rules",
+        "description": "Select the IPv4 or IPv6 rules you want to control from Home Assistant.",
+        "data": {
+          "rules": "Firewall rules"
+        }
+      }
+    },
+    "abort": {
+      "invalid_auth": "The firewall API key is missing or invalid.",
+      "permission_denied": "The firewall denied API access. Check Home Assistant’s allowed IP and the administrator profile.",
+      "unsupported_firmware": "The firewall REST API was not found. Sophos Firewall OS 23.0 or later is required.",
+      "cannot_connect": "Could not reach the Sophos HTTPS admin endpoint. Check the address, port, and TLS certificate.",
+      "unexpected_response": "The firewall returned a response this integration could not read."
+    }
+  }
+}

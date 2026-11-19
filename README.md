@@ -1,75 +1,31 @@
-# Sophos XG Firewall Rule Control for Home Assistant
+# Sophos Firewall Rules for Home Assistant
 
-A custom Home Assistant integration to **enable/disable specific Sophos XG
-(SFOS) firewall rules** as switch entities, using the Sophos XML API.
+Discover IPv4 and IPv6 firewall rules and expose the rules you select as Home Assistant switches. Each switch shows whether the rule is enabled on the firewall and can be used in dashboards and automations.
 
-This is a companion to [`sophos_xg`](https://github.com/istvanSA/sophos_xg)
-(SNMP monitoring). SNMP on Sophos XG is read-only, so toggling rules needs
-the separate XML API instead - that's what this integration talks to. Kept
-as its own repo/integration so it can be installed independently.
+**Requires Sophos Firewall OS (SFOS) 23.0 or later.** SFOS 23.0 introduced the configuration REST API used by this integration. Physical XG Series appliances top out at SFOS 20.0 and cannot run this integration. [SFOS 23.0 release notes](https://docs.sophos.com/releasenotes/output/en-us/nsg/sf_230_rn.html) · [XG firmware support](https://docs.sophos.com/releasenotes/output/en-us/nsg/sf_200_rn.html)
 
-## How it works
+The original XML-based Sophos XG Firewall Rule Control integration (`sophos_xg_rules`) is obsolete. This repository now provides its REST-only replacement (`sophos_firewall_rules`). SNMP sensors are provided independently by [`sophos_xg`](https://github.com/istvanSA/sophos_xg).
 
-The Sophos API has no partial update for a rule's status. Every toggle:
+## Requirements
 
-1. `Get`s the rule's full current XML by its exact **Name**.
-2. Flips only the `<Status>` element (`Enable`/`Disable`).
-3. `Set operation="update"`s that same XML back to the firewall.
+- Home Assistant 2026.1 or later.
+- Network access from Home Assistant to the firewall's HTTPS admin port (default `4444`).
+- Under **Administration → API access**, enable API access and allow the Home Assistant server's source IP.
+- A Sophos REST API key from an administrator profile with permission to read and update firewall rules. Setup checks read access. The firewall checks write permission when you use a switch. [Sophos REST API access and API keys](https://docs.sophos.com/nsg/sophos-firewall/23.0/Help/en-us/webhelp/onlinehelp/AdministratorHelp/Administration/APIRestAPI/APIAccessAndKeys/index.html)
 
-Rule status is also polled periodically so the switch reflects changes made
-elsewhere (e.g. the Sophos web admin).
+## Install and configure
 
-## Prerequisites
+1. In HACS, add [`istvanSA/SophosXG-Rules`](https://github.com/istvanSA/SophosXG-Rules) as a custom repository of category **Integration** and download **Sophos Firewall Rules**. For manual installation, copy `custom_components/sophos_firewall_rules` into your Home Assistant `config/custom_components` directory.
+2. Restart Home Assistant. Under **Settings → Devices & services → Add integration**, select **Sophos Firewall Rules**.
+3. Enter the firewall hostname or IP, HTTPS admin port, and REST API key. Certificate verification is enabled by default. Use a trusted certificate whose name matches the address used by Home Assistant.
+4. Select the rules to expose. The switches appear under the firewall device. Use **Configure** to reload the list and change your selection.
 
-- **API access enabled** on the firewall:
-  `Backup & Firmware > API` (or `Administration > API access` on newer
-  firmware) - turn it on and allow the IP address of your Home Assistant
-  instance.
-- **A dedicated API user** (recommended over reusing an admin account):
-  `Authentication > Users` - create a user, type **Administrator**, with an
-  administrator profile that has **read/write** rights to Firewall Rules.
-- Know the **exact Name** of each firewall rule you want to control, as it
-  appears in `Rules and policies` in the Sophos web admin. The API
-  addresses rules by name, not by the numeric row/ID shown in the UI.
+Switch **On** means the rule is enabled, whether the rule allows or blocks traffic. The integration polls once a minute while switches are in use and reads the rule back after a toggle. A missing rule or failed poll makes the affected switches unavailable. Home Assistant prompts for a replacement key if the firewall rejects the current one with HTTP 401.
 
-## Installation
+## Replace an existing XML installation
 
-### Method 1: HACS (custom repository)
-
-1. Open **HACS** in Home Assistant.
-2. Three dots (top right) > **Custom repositories**.
-3. Add `https://github.com/istvanSA/sophos_xg_rules`, category **Integration**.
-4. Find "Sophos XG Firewall Rule Control" in HACS and download it.
-5. Restart Home Assistant.
-
-### Method 2: Manual
-
-1. Download the latest release / repo contents.
-2. Copy `custom_components/sophos_xg_rules` into your Home Assistant
-   `config/custom_components` directory.
-3. Restart Home Assistant.
-
-## Configuration
-
-1. **Settings > Devices & Services > Add Integration**, search for
-   "Sophos XG Firewall Rule Control".
-2. Enter the firewall's **host/IP**, API **port** (default `4444`),
-   **username**, **password**, and whether to verify the SSL certificate
-   (leave this off if the firewall uses its default self-signed cert).
-3. Once added, open the integration's **Configure** option to **add
-   firewall rules by name**. Each added rule becomes a toggle switch
-   entity. Rules can also be removed the same way.
-
-## Notes / limitations
-
-- Only the rule's enabled/disabled status is changed - no other rule
-  settings are touched or need to be re-specified.
-- If a configured rule is renamed or deleted on the firewall, its switch
-  will show as unavailable until the rule is removed from the
-  integration's options (or re-added under its new name).
-- Credentials are stored in Home Assistant's config entry storage, as with
-  any other integration.
+Before uninstalling the old integration, note its entity IDs and the dashboard cards and automations that reference them. Remove the old integration entry, install the REST integration, and select the same rules. Then update the references to the new switches, or assign the previous entity IDs to the new switches once those IDs are free.
 
 ## License
 
-[MIT License](LICENSE)
+[MIT](LICENSE)
