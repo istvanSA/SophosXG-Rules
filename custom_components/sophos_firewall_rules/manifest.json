@@ -1,0 +1,14 @@
+{
+  "domain": "sophos_firewall_rules",
+  "name": "Sophos Firewall Rules",
+  "codeowners": [
+    "@istvanSA"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/istvanSA/SophosXG-Rules",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/istvanSA/SophosXG-Rules/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}
