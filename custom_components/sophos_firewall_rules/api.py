@@ -47,14 +47,18 @@ class Rule:
     @classmethod
     def from_json(cls, family: str, data: Any) -> "Rule":
         """Decode the fields the integration needs."""
+        if not isinstance(data, dict):
+            raise SophosApiError("expected a rule object")
         try:
             rule_id = str(UUID(data["id"]))
-            name = data["name"]
-            enabled = data["enabled"]
         except (AttributeError, KeyError, TypeError, ValueError):
-            raise SophosApiError("Unexpected Sophos rule response") from None
-        if not isinstance(name, str) or not name or type(enabled) is not bool:
-            raise SophosApiError("Unexpected Sophos rule response")
+            raise SophosApiError("expected a rule UUID in id") from None
+        name = data.get("name")
+        enabled = data.get("enabled")
+        if not isinstance(name, str) or not name:
+            raise SophosApiError("expected a nonempty rule name")
+        if not isinstance(enabled, bool):
+            raise SophosApiError("expected a boolean enabled field")
         return cls(family, rule_id, name, enabled)
 
 
@@ -96,11 +100,17 @@ class SophosClient:
                         "Firewall configuration API endpoint not found"
                     )
                 if response.status != 200:
-                    raise SophosApiError(f"Firewall returned HTTP {response.status}")
+                    raise SophosApiError(f"{method} returned HTTP {response.status}")
                 try:
                     return await response.json()
-                except (aiohttp.ContentTypeError, ValueError):
-                    raise SophosApiError("Unexpected Sophos JSON response") from None
+                except aiohttp.ContentTypeError:
+                    raise SophosApiError(
+                        f"{method} returned HTTP 200 without a JSON content type"
+                    ) from None
+                except ValueError:
+                    raise SophosApiError(
+                        f"{method} returned HTTP 200 with invalid JSON"
+                    ) from None
         except (TimeoutError, aiohttp.ClientError):
             raise SophosConnectionError(
                 "Could not complete request to the firewall"
@@ -112,33 +122,62 @@ class SophosClient:
         for family in FAMILIES:
             page = 1
             while True:
-                data = await self._request(
-                    "GET",
-                    self._base / family,
-                    params={"page": str(page), "pageSize": "200", "pageTotal": "true"},
-                    collection=True,
-                )
                 try:
-                    items = data["items"]
-                    current = data["pages"]["current"]
-                    total = data["pages"]["total"]
-                except (KeyError, TypeError):
-                    raise SophosApiError("Unexpected Sophos rule list") from None
-                if (
-                    not isinstance(items, list)
-                    or type(current) is not int
-                    or current != page
-                    or type(total) is not int
-                    or total < 0
+                    page_rules, has_next = await self._async_read_rule_page(family, page)
+                except (
+                    SophosAuthError,
+                    SophosPermissionError,
+                    SophosUnsupportedError,
+                    SophosConnectionError,
                 ):
-                    raise SophosApiError("Unexpected Sophos rule list")
-                for item in items:
-                    rule = Rule.from_json(family, item)
-                    rules[rule.key] = rule
-                if page >= total:
+                    raise
+                except SophosApiError as err:
+                    raise SophosApiError(
+                        f"{family} rule list, page {page}: {err}"
+                    ) from None
+                if rules.keys() & page_rules.keys():
+                    raise SophosApiError(f"{family} rule list repeated a rule on page {page}")
+                rules.update(page_rules)
+                if not has_next:
                     break
                 page += 1
         return rules
+
+    async def _async_read_rule_page(
+        self, family: str, page: int
+    ) -> tuple[dict[str, Rule], bool]:
+        data = await self._request(
+            "GET",
+            self._base / family,
+            params={"page": str(page), "pageTotal": "true"},
+            collection=True,
+        )
+        if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+            raise SophosApiError("expected an items array")
+        if not isinstance(pages := data.get("pages"), dict):
+            raise SophosApiError("expected a pages object")
+
+        items = data["items"]
+        current = pages.get("current")
+        if type(current) is not int or current != page:
+            raise SophosApiError("unexpected current page number")
+
+        total = pages.get("total")
+        if total is None:
+            size = pages.get("size")
+            if type(size) is not int or size < len(items) or size < 0:
+                raise SophosApiError("invalid page size without a page total")
+            has_next = size > 0 and len(items) == size
+        elif type(total) is int and total >= 0:
+            has_next = page < total
+        else:
+            raise SophosApiError("invalid page total")
+
+        rules: dict[str, Rule] = {}
+        for item in items:
+            rule = Rule.from_json(family, item)
+            rules[rule.key] = rule
+        return rules, has_next
 
     async def async_set_enabled(self, rule: Rule, enabled: bool) -> None:
         """Patch the enabled field and verify it with a fresh GET."""

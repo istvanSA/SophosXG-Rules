@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from ipaddress import IPv6Address
+import logging
 from typing import Any
 
 from homeassistant.config_entries import (
@@ -27,6 +28,7 @@ from .api import (
 )
 from .const import CONF_RULES, DEFAULT_PORT, DOMAIN
 
+_LOGGER = logging.getLogger(__name__)
 _KEY_SELECTOR = selector.TextSelector(
     selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
 )
@@ -71,7 +73,8 @@ async def _discover(
         return {}, "unsupported_firmware"
     except SophosConnectionError:
         return {}, "cannot_connect"
-    except SophosApiError:
+    except SophosApiError as err:
+        _LOGGER.warning("Could not discover Sophos firewall rules: %s", err)
         return {}, "unexpected_response"
 
 
